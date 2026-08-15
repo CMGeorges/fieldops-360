@@ -1,3 +1,5 @@
+using FieldOps.Domain;
+
 namespace FieldOps.Domain.WorkOrders;
 
 public sealed class WorkOrder
@@ -13,11 +15,11 @@ public sealed class WorkOrder
         WorkOrderPriority priority,
         DateTimeOffset createdAtUtc)
     {
-        Id = RequireId(id, nameof(id));
-        OrganizationId = RequireId(organizationId, nameof(organizationId));
-        RequesterId = RequireId(requesterId, nameof(requesterId));
-        Title = RequireText(title, nameof(title), 160);
-        Description = RequireText(description, nameof(description), 4_000);
+        Id = DomainGuard.RequiredId(id, nameof(id));
+        OrganizationId = DomainGuard.RequiredId(organizationId, nameof(organizationId));
+        RequesterId = DomainGuard.RequiredId(requesterId, nameof(requesterId));
+        Title = DomainGuard.RequiredText(title, nameof(title), 160);
+        Description = DomainGuard.RequiredText(description, nameof(description), 4_000);
         Priority = priority;
         Status = WorkOrderStatus.Submitted;
         CreatedAtUtc = createdAtUtc;
@@ -64,11 +66,9 @@ public sealed class WorkOrder
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Submitted, WorkOrderStatus.Reopened);
-        if (slaDueAtUtc <= nowUtc)
-            throw new WorkOrderException("sla.invalid", "The SLA due date must be in the future.");
-
+        var validSlaDueAtUtc = DomainGuard.Future(slaDueAtUtc, nowUtc, "sla.invalid", "The SLA due date must be in the future.");
         Priority = priority;
-        SlaDueAtUtc = slaDueAtUtc;
+        SlaDueAtUtc = validSlaDueAtUtc;
         Transition(WorkOrderStatus.Triaged, actorId, commandId, "WorkOrderTriaged", null, nowUtc);
     }
 
@@ -81,11 +81,10 @@ public sealed class WorkOrder
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Triaged, WorkOrderStatus.Declined, WorkOrderStatus.NoResponse, WorkOrderStatus.NoShow);
-        if (expiresAtUtc <= nowUtc)
-            throw new WorkOrderException("offer.expiry.invalid", "The offer expiry must be in the future.");
-
-        ContractorId = RequireId(contractorId, nameof(contractorId));
-        OfferExpiresAtUtc = expiresAtUtc;
+        var validContractorId = DomainGuard.RequiredId(contractorId, nameof(contractorId));
+        var validExpiresAtUtc = DomainGuard.Future(expiresAtUtc, nowUtc, "offer.expiry.invalid", "The offer expiry must be in the future.");
+        ContractorId = validContractorId;
+        OfferExpiresAtUtc = validExpiresAtUtc;
         ScheduledForUtc = null;
         Transition(WorkOrderStatus.Offered, actorId, commandId, "AssignmentOffered", null, nowUtc);
     }
@@ -95,7 +94,7 @@ public sealed class WorkOrder
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Offered);
         RequireAssignedContractor(contractorId);
-        if (OfferExpiresAtUtc <= nowUtc)
+        if (OfferExpiresAtUtc!.Value <= nowUtc)
             throw new WorkOrderException("offer.expired", "The assignment offer has expired.");
 
         Transition(WorkOrderStatus.Accepted, contractorId, commandId, "AssignmentAccepted", null, nowUtc);
@@ -106,14 +105,14 @@ public sealed class WorkOrder
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Offered);
         RequireAssignedContractor(contractorId);
-        Transition(WorkOrderStatus.Declined, contractorId, commandId, "AssignmentDeclined", RequireText(reason, nameof(reason), 500), nowUtc);
+        Transition(WorkOrderStatus.Declined, contractorId, commandId, "AssignmentDeclined", DomainGuard.RequiredText(reason, nameof(reason), 500), nowUtc);
     }
 
     public void MarkNoResponse(Guid actorId, Guid commandId, DateTimeOffset nowUtc)
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Offered);
-        if (OfferExpiresAtUtc is null || OfferExpiresAtUtc > nowUtc)
+        if (OfferExpiresAtUtc!.Value > nowUtc)
             throw new WorkOrderException("offer.active", "The response window is still active.");
 
         Transition(WorkOrderStatus.NoResponse, actorId, commandId, "AssignmentTimedOut", "No response before the deadline.", nowUtc);
@@ -124,10 +123,7 @@ public sealed class WorkOrder
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Accepted);
         RequireAssignedContractor(contractorId);
-        if (scheduledForUtc <= nowUtc)
-            throw new WorkOrderException("schedule.invalid", "The appointment must be in the future.");
-
-        ScheduledForUtc = scheduledForUtc;
+        ScheduledForUtc = DomainGuard.Future(scheduledForUtc, nowUtc, "schedule.invalid", "The appointment must be in the future.");
         Transition(WorkOrderStatus.Scheduled, contractorId, commandId, "AppointmentScheduled", null, nowUtc);
     }
 
@@ -136,6 +132,9 @@ public sealed class WorkOrder
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Scheduled);
         RequireAssignedContractor(contractorId);
+        if (ScheduledForUtc!.Value > nowUtc)
+            throw new WorkOrderException("appointment.not_started", "The scheduled start time has not been reached.");
+
         Transition(WorkOrderStatus.InProgress, contractorId, commandId, "WorkStarted", null, nowUtc);
     }
 
@@ -143,9 +142,9 @@ public sealed class WorkOrder
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Scheduled);
-        if (ScheduledForUtc is null || ScheduledForUtc > nowUtc)
+        if (ScheduledForUtc!.Value > nowUtc)
             throw new WorkOrderException("appointment.active", "The scheduled time has not passed.");
-        Transition(WorkOrderStatus.NoShow, actorId, commandId, "ContractorNoShow", RequireText(reason, nameof(reason), 500), nowUtc);
+        Transition(WorkOrderStatus.NoShow, actorId, commandId, "ContractorNoShow", DomainGuard.RequiredText(reason, nameof(reason), 500), nowUtc);
     }
 
     public void SubmitForReview(Guid contractorId, Guid commandId, DateTimeOffset nowUtc)
@@ -167,19 +166,19 @@ public sealed class WorkOrder
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Closed, WorkOrderStatus.ReadyForReview);
-        Transition(WorkOrderStatus.Reopened, actorId, commandId, "WorkOrderReopened", RequireText(reason, nameof(reason), 500), nowUtc);
+        Transition(WorkOrderStatus.Reopened, actorId, commandId, "WorkOrderReopened", DomainGuard.RequiredText(reason, nameof(reason), 500), nowUtc);
     }
 
     private bool AlreadyProcessed(Guid commandId)
     {
-        RequireId(commandId, nameof(commandId));
+        DomainGuard.RequiredId(commandId, nameof(commandId));
         return _events.Exists(item => item.CommandId == commandId);
     }
 
     private void RequireAssignedContractor(Guid contractorId)
     {
-        RequireId(contractorId, nameof(contractorId));
-        if (ContractorId != contractorId)
+        DomainGuard.RequiredId(contractorId, nameof(contractorId));
+        if (ContractorId!.Value != contractorId)
             throw new WorkOrderException("assignment.forbidden", "Only the assigned contractor may perform this action.");
     }
 
@@ -197,6 +196,8 @@ public sealed class WorkOrder
         string? reason,
         DateTimeOffset nowUtc)
     {
+        DomainGuard.RequiredId(commandId, nameof(commandId));
+        DomainGuard.RequiredId(actorId, nameof(actorId));
         var previous = Status;
         Status = next;
         UpdatedAtUtc = nowUtc;
@@ -211,25 +212,12 @@ public sealed class WorkOrder
         string? reason,
         DateTimeOffset nowUtc)
     {
-        RequireId(commandId, nameof(commandId));
-        RequireId(actorId, nameof(actorId));
+        DomainGuard.RequiredId(commandId, nameof(commandId));
+        DomainGuard.RequiredId(actorId, nameof(actorId));
         Version++;
         _events.Add(new WorkOrderEvent(
             Guid.NewGuid(), Id, OrganizationId, actorId, commandId, eventType,
             from, Status, reason, nowUtc, Version));
     }
 
-    private static Guid RequireId(Guid value, string name)
-    {
-        if (value == Guid.Empty) throw new ArgumentException("A non-empty identifier is required.", name);
-        return value;
-    }
-
-    private static string RequireText(string value, string name, int maxLength)
-    {
-        var normalized = value?.Trim() ?? string.Empty;
-        if (normalized.Length == 0 || normalized.Length > maxLength)
-            throw new ArgumentException($"{name} must contain between 1 and {maxLength} characters.", name);
-        return normalized;
-    }
 }

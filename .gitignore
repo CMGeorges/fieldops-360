@@ -4,10 +4,14 @@ obj/
 .vscode/
 TestResults/
 coverage/
+node_modules/
+dist/
+*.tsbuildinfo
+__pycache__/
+*.pyc
 *.user
 *.suo
 *.log
 .env
 .env.*
 !.env.example
-

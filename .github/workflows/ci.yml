@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  domain-tests:
+  backend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -23,8 +23,55 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj
+        run: dotnet restore src/FieldOps.Api/FieldOps.Api.csproj
 
-      - name: Test
-        run: dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj --no-restore --configuration Release
+      - name: Build API
+        run: dotnet build src/FieldOps.Api/FieldOps.Api.csproj --no-restore --configuration Release
 
+      - name: Test domain
+        run: >-
+          dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj
+          --configuration Release
+          /p:CollectCoverage=true
+          /p:CoverletOutput="$GITHUB_WORKSPACE/TestResults/domain/coverage"
+          /p:CoverletOutputFormat=cobertura
+
+      - name: Enforce coverage quality gate
+        run: |
+          set -o pipefail
+          python scripts/coverage_report.py \
+            TestResults/domain/coverage.cobertura.xml \
+            --min-line 90 \
+            --min-branch 85 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fieldops-domain-coverage
+          path: TestResults/domain/coverage.cobertura.xml
+          if-no-files-found: warn
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build
+        working-directory: web
+        run: npm run build
