@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  domain-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj
+
+      - name: Test
+        run: dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj --no-restore --configuration Release
+
