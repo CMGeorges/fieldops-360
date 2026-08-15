@@ -63,11 +63,14 @@ The design intentionally starts as a modular monolith. Service extraction is pos
 ## Verification
 
 ```bash
-dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj
+dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj \
+  /p:CollectCoverage=true \
+  /p:CoverletOutput=./TestResults/coverage \
+  /p:CoverletOutputFormat=cobertura
 cd web && npm ci && npm run build
 ```
 
-GitHub Actions executes backend build/tests and the production frontend build on every pull request and push to `master`.
+GitHub Actions executes backend build/tests and the production frontend build on every pull request and push to `master`. The domain quality gate requires at least 90% line coverage and 85% branch coverage; the Cobertura report is retained as a workflow artifact.
 
 ## Documentation
 
@@ -83,4 +86,3 @@ GitHub Actions executes backend build/tests and the production frontend build on
 3. Microsoft Entra ID / OIDC and organization-scoped authorization policies.
 4. Evidence upload with short-lived signed URLs and malware scanning.
 5. Integration tests with Testcontainers, browser E2E and deployment observability.
-

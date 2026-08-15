@@ -66,8 +66,9 @@ public sealed class WorkOrder
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Submitted, WorkOrderStatus.Reopened);
+        var validSlaDueAtUtc = DomainGuard.Future(slaDueAtUtc, nowUtc, "sla.invalid", "The SLA due date must be in the future.");
         Priority = priority;
-        SlaDueAtUtc = DomainGuard.Future(slaDueAtUtc, nowUtc, "sla.invalid", "The SLA due date must be in the future.");
+        SlaDueAtUtc = validSlaDueAtUtc;
         Transition(WorkOrderStatus.Triaged, actorId, commandId, "WorkOrderTriaged", null, nowUtc);
     }
 
@@ -80,8 +81,10 @@ public sealed class WorkOrder
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Triaged, WorkOrderStatus.Declined, WorkOrderStatus.NoResponse, WorkOrderStatus.NoShow);
-        ContractorId = DomainGuard.RequiredId(contractorId, nameof(contractorId));
-        OfferExpiresAtUtc = DomainGuard.Future(expiresAtUtc, nowUtc, "offer.expiry.invalid", "The offer expiry must be in the future.");
+        var validContractorId = DomainGuard.RequiredId(contractorId, nameof(contractorId));
+        var validExpiresAtUtc = DomainGuard.Future(expiresAtUtc, nowUtc, "offer.expiry.invalid", "The offer expiry must be in the future.");
+        ContractorId = validContractorId;
+        OfferExpiresAtUtc = validExpiresAtUtc;
         ScheduledForUtc = null;
         Transition(WorkOrderStatus.Offered, actorId, commandId, "AssignmentOffered", null, nowUtc);
     }
@@ -129,6 +132,9 @@ public sealed class WorkOrder
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Scheduled);
         RequireAssignedContractor(contractorId);
+        if (ScheduledForUtc is null || ScheduledForUtc > nowUtc)
+            throw new WorkOrderException("appointment.not_started", "The scheduled start time has not been reached.");
+
         Transition(WorkOrderStatus.InProgress, contractorId, commandId, "WorkStarted", null, nowUtc);
     }
 
@@ -190,6 +196,8 @@ public sealed class WorkOrder
         string? reason,
         DateTimeOffset nowUtc)
     {
+        DomainGuard.RequiredId(commandId, nameof(commandId));
+        DomainGuard.RequiredId(actorId, nameof(actorId));
         var previous = Status;
         Status = next;
         UpdatedAtUtc = nowUtc;

@@ -29,7 +29,28 @@ jobs:
         run: dotnet build src/FieldOps.Api/FieldOps.Api.csproj --no-restore --configuration Release
 
       - name: Test domain
-        run: dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj --configuration Release
+        run: >-
+          dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj
+          --configuration Release
+          /p:CollectCoverage=true
+          /p:CoverletOutput="$GITHUB_WORKSPACE/TestResults/domain/coverage"
+          /p:CoverletOutputFormat=cobertura
+
+      - name: Enforce coverage quality gate
+        run: >-
+          python scripts/coverage_report.py
+          TestResults/domain/coverage.cobertura.xml
+          --min-line 90
+          --min-branch 85
+          | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fieldops-domain-coverage
+          path: TestResults/domain/coverage.cobertura.xml
+          if-no-files-found: warn
 
   frontend:
     runs-on: ubuntu-latest
@@ -53,4 +74,3 @@ jobs:
       - name: Build
         working-directory: web
         run: npm run build
-
