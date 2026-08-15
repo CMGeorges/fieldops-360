@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  domain-tests:
+  backend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -23,8 +23,34 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj
+        run: dotnet restore src/FieldOps.Api/FieldOps.Api.csproj
 
-      - name: Test
-        run: dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj --no-restore --configuration Release
+      - name: Build API
+        run: dotnet build src/FieldOps.Api/FieldOps.Api.csproj --no-restore --configuration Release
+
+      - name: Test domain
+        run: dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj --configuration Release
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build
+        working-directory: web
+        run: npm run build
 
