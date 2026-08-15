@@ -37,12 +37,13 @@ jobs:
           /p:CoverletOutputFormat=cobertura
 
       - name: Enforce coverage quality gate
-        run: >-
-          python scripts/coverage_report.py
-          TestResults/domain/coverage.cobertura.xml
-          --min-line 90
-          --min-branch 85
-          | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          python scripts/coverage_report.py \
+            TestResults/domain/coverage.cobertura.xml \
+            --min-line 90 \
+            --min-branch 85 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage report
         if: always()

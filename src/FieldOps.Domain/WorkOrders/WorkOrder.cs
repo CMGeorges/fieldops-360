@@ -94,7 +94,7 @@ public sealed class WorkOrder
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Offered);
         RequireAssignedContractor(contractorId);
-        if (OfferExpiresAtUtc <= nowUtc)
+        if (OfferExpiresAtUtc!.Value <= nowUtc)
             throw new WorkOrderException("offer.expired", "The assignment offer has expired.");
 
         Transition(WorkOrderStatus.Accepted, contractorId, commandId, "AssignmentAccepted", null, nowUtc);
@@ -112,7 +112,7 @@ public sealed class WorkOrder
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Offered);
-        if (OfferExpiresAtUtc is null || OfferExpiresAtUtc > nowUtc)
+        if (OfferExpiresAtUtc!.Value > nowUtc)
             throw new WorkOrderException("offer.active", "The response window is still active.");
 
         Transition(WorkOrderStatus.NoResponse, actorId, commandId, "AssignmentTimedOut", "No response before the deadline.", nowUtc);
@@ -132,7 +132,7 @@ public sealed class WorkOrder
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Scheduled);
         RequireAssignedContractor(contractorId);
-        if (ScheduledForUtc is null || ScheduledForUtc > nowUtc)
+        if (ScheduledForUtc!.Value > nowUtc)
             throw new WorkOrderException("appointment.not_started", "The scheduled start time has not been reached.");
 
         Transition(WorkOrderStatus.InProgress, contractorId, commandId, "WorkStarted", null, nowUtc);
@@ -142,7 +142,7 @@ public sealed class WorkOrder
     {
         if (AlreadyProcessed(commandId)) return;
         RequireStatus(WorkOrderStatus.Scheduled);
-        if (ScheduledForUtc is null || ScheduledForUtc > nowUtc)
+        if (ScheduledForUtc!.Value > nowUtc)
             throw new WorkOrderException("appointment.active", "The scheduled time has not passed.");
         Transition(WorkOrderStatus.NoShow, actorId, commandId, "ContractorNoShow", DomainGuard.RequiredText(reason, nameof(reason), 500), nowUtc);
     }
@@ -178,7 +178,7 @@ public sealed class WorkOrder
     private void RequireAssignedContractor(Guid contractorId)
     {
         DomainGuard.RequiredId(contractorId, nameof(contractorId));
-        if (ContractorId != contractorId)
+        if (ContractorId!.Value != contractorId)
             throw new WorkOrderException("assignment.forbidden", "Only the assigned contractor may perform this action.");
     }
 

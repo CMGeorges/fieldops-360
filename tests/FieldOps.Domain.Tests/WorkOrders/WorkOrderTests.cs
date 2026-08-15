@@ -50,6 +50,8 @@ public sealed class WorkOrderTests
         Assert.Equal(1, audit.Version);
         Assert.Equal("Water leak", order.Title);
         Assert.Equal("Leak in the mechanical room.", order.Description);
+        Assert.Equal(RequesterId, order.RequesterId);
+        Assert.Equal(Now, order.CreatedAtUtc);
     }
 
     [Theory]
@@ -74,6 +76,14 @@ public sealed class WorkOrderTests
     {
         Assert.Throws<ArgumentException>(() => WorkOrder.Submit(
             NewId(), OrganizationId, title, "Leak detected.", RequesterId,
+            WorkOrderPriority.P1, NewId(), Now));
+    }
+
+    [Fact]
+    public void Submission_rejects_null_title()
+    {
+        Assert.Throws<ArgumentException>(() => WorkOrder.Submit(
+            NewId(), OrganizationId, null!, "Leak detected.", RequesterId,
             WorkOrderPriority.P1, NewId(), Now));
     }
 
@@ -104,6 +114,40 @@ public sealed class WorkOrderTests
 
         Assert.Equal(2, order.Version);
         Assert.Equal(2, order.Events.Count);
+    }
+
+    [Fact]
+    public void Every_transition_ignores_a_duplicate_command()
+    {
+        AssertDuplicateIsIgnored(Triaged(), (order, command) =>
+            order.OfferTo(ContractorId, Now.AddMinutes(30), DispatcherId, command, Now.AddMinutes(2)));
+
+        AssertDuplicateIsIgnored(Offered(), (order, command) =>
+            order.AcceptOffer(ContractorId, command, Now.AddMinutes(3)));
+
+        AssertDuplicateIsIgnored(Offered(), (order, command) =>
+            order.DeclineOffer(ContractorId, "Unavailable", command, Now.AddMinutes(3)));
+
+        AssertDuplicateIsIgnored(Offered(Now.AddMinutes(10)), (order, command) =>
+            order.MarkNoResponse(DispatcherId, command, Now.AddMinutes(11)));
+
+        AssertDuplicateIsIgnored(Accepted(), (order, command) =>
+            order.Schedule(ContractorId, Now.AddHours(1), command, Now.AddMinutes(4)));
+
+        AssertDuplicateIsIgnored(Scheduled(), (order, command) =>
+            order.Start(ContractorId, command, Now.AddHours(1)));
+
+        AssertDuplicateIsIgnored(Scheduled(), (order, command) =>
+            order.MarkNoShow(DispatcherId, "Unavailable", command, Now.AddHours(1)));
+
+        AssertDuplicateIsIgnored(InProgress(), (order, command) =>
+            order.SubmitForReview(ContractorId, command, Now.AddHours(2)));
+
+        AssertDuplicateIsIgnored(ReadyForReview(), (order, command) =>
+            order.Close(DispatcherId, command, Now.AddHours(2).AddMinutes(5)));
+
+        AssertDuplicateIsIgnored(Closed(), (order, command) =>
+            order.Reopen(DispatcherId, "Problem returned", command, Now.AddHours(3)));
     }
 
     [Fact]
@@ -410,6 +454,19 @@ public sealed class WorkOrderTests
         var order = ReadyForReview();
         order.Close(DispatcherId, NewId(), Now.AddHours(2).AddMinutes(5));
         return order;
+    }
+
+    private static void AssertDuplicateIsIgnored(WorkOrder order, Action<WorkOrder, Guid> transition)
+    {
+        var commandId = NewId();
+        transition(order, commandId);
+        var version = order.Version;
+        var events = order.Events.Count;
+
+        transition(order, commandId);
+
+        Assert.Equal(version, order.Version);
+        Assert.Equal(events, order.Events.Count);
     }
 
     private static Guid NewId() => Guid.NewGuid();
