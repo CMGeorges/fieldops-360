@@ -1,0 +1,36 @@
+name: FieldOps Atelier
+on:
+  pull_request:
+    paths: ['apps/fieldops-atelier/**', '.github/workflows/fieldops-atelier.yml']
+  push:
+    branches: [master]
+    paths: ['apps/fieldops-atelier/**', '.github/workflows/fieldops-atelier.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/fieldops-atelier
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: apps/fieldops-atelier/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint:app
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm test:runtime
+      - run: node scripts/prepare-offline.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fieldops-atelier-build
+          path: apps/fieldops-atelier/dist

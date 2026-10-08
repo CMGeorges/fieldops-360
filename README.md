@@ -1,46 +1,27 @@
 # FieldOps 360
 
-Coordination fiable des demandes d'intervention entre demandeurs, gestionnaires et contracteurs.
+Je construis mon environnement de travail pour coordonner les interventions, documenter mes chantiers et conserver mes événements de pointage.
 
-> État actuel : cadrage produit et noyau de domaine. Le projet n'est pas encore présenté comme prêt pour une exploitation client.
+## Mon application FieldOps Atelier
 
-## Pourquoi ce produit
+Je dispose maintenant d’un module web distinct dans [`apps/fieldops-atelier`](apps/fieldops-atelier). Je peux créer mes dossiers, conserver mes photos, saisir pièces/relevés/inventaire/équipements, planifier mes interventions, enregistrer mes heures et préparer un brouillon de devis depuis les surfaces et le pointage.
 
-Les outils existants centralisent généralement les demandes et les horaires. FieldOps 360 met l'accent sur la chaîne de responsabilité lorsqu'une intervention traverse plusieurs entreprises : offre horodatée, acceptation explicite, délai de réponse, absence, réassignation et preuve complète.
+Je sauvegarde d’abord sur l’appareil, puis je synchronise avec contrôle de version et déduplication. Je conserve les changements refusés et je n’efface pas les horodatages d’origine. Une version privée est publiée ; je n’ouvre pas les dossiers au public.
 
-## Première tranche verticale
+Je retrouve mon installation, mes garanties et mes limites dans le [guide du module](apps/fieldops-atelier/README.md). Je vérifie 30 tests automatisés : calculs, stockage local, synchronisation D1 et routes compilées. Je n’ai pas encore exécuté la recette visuelle sur téléphone ni mesuré une supériorité sur Mobile-Punch.
 
-`Demande → triage → offre → acceptation/refus → planification → intervention → validation → fermeture`
+Je ne revendique pas une équivalence complète avec Encircle ou Mobile-Punch : mes accès d’équipe, la paie, les signatures, les plans automatiques et la fusion multi-appareils restent à développer. Mon [périmètre](apps/fieldops-atelier/docs/PERIMETRE.md) distingue ce qui fonctionne et ce qui reste à réaliser.
 
-Les chemins `NO_RESPONSE`, `NO_SHOW` et `REOPENED` font partie du modèle dès la première version; ils ne sont pas traités comme de simples notes.
+## Mon noyau de domaine .NET
 
-## Structure prévue
+Je conserve dans `src/FieldOps.Domain` le noyau de coordination des demandes d’intervention, avec son offre horodatée, son acceptation explicite, ses délais, sa réassignation et ses événements. Je n’ai pas encore relié ce noyau C# au nouveau module web.
 
-```text
-src/
-  FieldOps.Domain/          règles métier et agrégats
-  FieldOps.Application/     cas d'utilisation et ports
-  FieldOps.Infrastructure/  PostgreSQL, stockage, notifications
-  FieldOps.Api/             API ASP.NET Core
-web/                        interface React/TypeScript
-tests/                      tests unitaires, intégration et E2E
-docs/                       architecture, menaces et décisions
-```
+Mon parcours prévu reste : demande → triage → offre → acceptation/refus → planification → intervention → validation → fermeture. Je garde les cas d’absence de réponse, d’absence terrain et de réouverture dans le modèle.
 
-## Démarrage du noyau de domaine
-
-Prérequis : SDK .NET 10.
+Pour vérifier ce noyau, je dispose du SDK .NET 10 et je lance :
 
 ```bash
 dotnet test tests/FieldOps.Domain.Tests/FieldOps.Domain.Tests.csproj
 ```
 
-## Sécurité et données
-
-- données de démonstration uniquement;
-- aucun secret dans le dépôt;
-- isolation par organisation imposée à chaque commande;
-- transitions contrôlées et versionnées;
-- journal d'événements append-only au niveau du domaine.
-
-Voir [PRODUCT.md](PRODUCT.md) et [l'architecture](docs/architecture.md).
+Je retrouve son cadrage initial dans [PRODUCT.md](PRODUCT.md) et [docs/architecture.md](docs/architecture.md). Ces documents décrivent le noyau précédent, pas une intégration achevée au module Atelier.
